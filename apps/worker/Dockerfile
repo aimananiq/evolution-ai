@@ -9,4 +9,4 @@ RUN pnpm --filter @evo/db generate
 RUN pnpm --filter @evo/worker build
 EXPOSE 4100
 WORKDIR /app/apps/worker
-CMD ["pnpm", "start"]
+CMD ["sh", "-c", "cd /app && pnpm --filter @evo/db migrate && cd /app/apps/worker && pnpm start"]
