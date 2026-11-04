@@ -78,6 +78,9 @@ services:
       WEBHOOK_PUBLIC_BASE_URL: ${WEBHOOK_PUBLIC_BASE_URL}
       AUTH_SECRET: ${AUTH_SECRET}
       AUTH_URL: ${AUTH_URL}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      PLAN_ENFORCE: ${PLAN_ENFORCE}
+      WEBHOOK_INBOUND_SECRET: ${WEBHOOK_INBOUND_SECRET}
       DEFAULT_LOCALE: en-GB
       UPLOAD_DIR: /app/uploads
       MEDIA_PUBLIC_BASE_URL: http://web:3000
@@ -94,6 +97,8 @@ services:
       DATABASE_URL: postgresql://manager:manager@postgres-manager:5432/evolution_manager?schema=public
       REDIS_URL: redis://redis-manager:6379/0
       EVOLUTION_BASE_URL: http://evolution-api:8080
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      EVOLUTION_GLOBAL_API_KEY: ${EVOLUTION_GLOBAL_API_KEY}
     depends_on:
       postgres-manager: { condition: service_healthy }
       redis-manager: { condition: service_healthy }
@@ -103,6 +108,8 @@ services:
     environment:
       DATABASE_URL: postgresql://manager:manager@postgres-manager:5432/evolution_manager?schema=public
       REDIS_URL: redis://redis-manager:6379/0
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      WEBHOOK_INBOUND_SECRET: ${WEBHOOK_INBOUND_SECRET}
     depends_on:
       postgres-manager: { condition: service_healthy }
       redis-manager: { condition: service_healthy }
