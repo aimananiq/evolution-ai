@@ -1,0 +1,13 @@
+{
+  email admin@localhost
+  auto_https off
+}
+
+:80 {
+  handle /api/whatsapp/webhook/* {
+    reverse_proxy ingest:4000
+  }
+  handle {
+    reverse_proxy web:3000
+  }
+}

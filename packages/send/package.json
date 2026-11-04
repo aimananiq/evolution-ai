@@ -1,0 +1,24 @@
+{
+  "name": "@evo/send",
+  "version": "0.0.0",
+  "private": true,
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "test": "vitest run --passWithNoTests",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@evo/crypto": "workspace:*",
+    "@evo/db": "workspace:*",
+    "@evo/evolution-client": "workspace:*",
+    "@evo/health": "workspace:*",
+    "@evo/queue": "workspace:*",
+    "@evo/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "vitest": "^2.1.0",
+    "typescript": "5.7.2",
+    "@types/node": "^22.0.0"
+  }
+}

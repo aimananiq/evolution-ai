@@ -1,0 +1,133 @@
+name: evolution-manager
+services:
+  postgres-manager:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: manager
+      POSTGRES_PASSWORD: manager
+      POSTGRES_DB: evolution_manager
+    ports: ["5433:5432"]
+    volumes: [postgres-manager-data:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U manager"]
+      interval: 5s
+      retries: 10
+
+  redis-manager:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+    volumes: [redis-manager-data:/data]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 10
+
+  postgres-evolution:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: evolution
+      POSTGRES_PASSWORD: evolution
+      POSTGRES_DB: evolution
+    ports: ["5434:5432"]
+    volumes: [postgres-evolution-data:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U evolution"]
+      interval: 5s
+      retries: 10
+
+  redis-evolution:
+    image: redis:7-alpine
+    ports: ["6380:6379"]
+    volumes: [redis-evolution-data:/data]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 10
+
+  evolution-api:
+    image: atendai/evolution-api:v2.2.3
+    environment:
+      SERVER_TYPE: http
+      SERVER_PORT: 8080
+      CORS_ORIGIN: "*"
+      AUTHENTICATION_TYPE: apikey
+      AUTHENTICATION_API_KEY: ${EVOLUTION_GLOBAL_API_KEY}
+      DATABASE_ENABLED: "true"
+      DATABASE_PROVIDER: postgresql
+      DATABASE_CONNECTION_URI: postgresql://evolution:evolution@postgres-evolution:5432/evolution?schema=public
+      DATABASE_CONNECTION_CLIENT_NAME: evolution_exchange
+      CACHE_REDIS_ENABLED: "true"
+      CACHE_REDIS_URI: redis://redis-evolution:6379/0
+      CACHE_REDIS_PREFIX_KEY: evolution
+      CACHE_LOCAL_ENABLED: "false"
+      LOG_LEVEL: ERROR,WARN,INFO
+      DEL_INSTANCE: "false"
+      QRCODE_LIMIT: 30
+      WEBHOOK_GLOBAL_ENABLED: "false"
+    depends_on:
+      postgres-evolution: { condition: service_healthy }
+      redis-evolution: { condition: service_healthy }
+    ports: ["8080:8080"]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080 >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      retries: 10
+
+  web:
+    build: { context: ., dockerfile: apps/web/Dockerfile }
+    environment:
+      DATABASE_URL: postgresql://manager:manager@postgres-manager:5432/evolution_manager?schema=public
+      REDIS_URL: redis://redis-manager:6379/0
+      EVOLUTION_BASE_URL: http://evolution-api:8080
+      EVOLUTION_GLOBAL_API_KEY: ${EVOLUTION_GLOBAL_API_KEY}
+      WEBHOOK_PUBLIC_BASE_URL: ${WEBHOOK_PUBLIC_BASE_URL}
+      AUTH_SECRET: ${AUTH_SECRET}
+      AUTH_URL: ${AUTH_URL}
+      DEFAULT_LOCALE: en-GB
+      UPLOAD_DIR: /app/uploads
+      MEDIA_PUBLIC_BASE_URL: http://web:3000
+    volumes:
+      - media-uploads:/app/uploads
+    depends_on:
+      postgres-manager: { condition: service_healthy }
+      redis-manager: { condition: service_healthy }
+      evolution-api: { condition: service_healthy }
+    ports: ["3000:3000"]
+
+  worker:
+    build: { context: ., dockerfile: apps/worker/Dockerfile }
+    environment:
+      DATABASE_URL: postgresql://manager:manager@postgres-manager:5432/evolution_manager?schema=public
+      REDIS_URL: redis://redis-manager:6379/0
+      EVOLUTION_BASE_URL: http://evolution-api:8080
+    depends_on:
+      postgres-manager: { condition: service_healthy }
+      redis-manager: { condition: service_healthy }
+
+  ingest:
+    build: { context: ., dockerfile: apps/ingest/Dockerfile }
+    environment:
+      DATABASE_URL: postgresql://manager:manager@postgres-manager:5432/evolution_manager?schema=public
+      REDIS_URL: redis://redis-manager:6379/0
+    depends_on:
+      postgres-manager: { condition: service_healthy }
+      redis-manager: { condition: service_healthy }
+    ports: ["4000:4000"]
+
+  caddy:
+    image: caddy:2-alpine
+    ports: ["80:80", "443:443"]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on: [web, ingest]
+
+volumes:
+  postgres-manager-data:
+  redis-manager-data:
+  postgres-evolution-data:
+  redis-evolution-data:
+  caddy-data:
+  caddy-config:
+  media-uploads:

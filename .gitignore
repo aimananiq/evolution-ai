@@ -1,0 +1,26 @@
+node_modules
+.next
+dist
+.turbo
+*.log
+.env
+.env.local
+.env.*.local
+.DS_Store
+coverage
+playwright-report
+test-results
+prisma/migrations/.tmp
+
+# Vendored Evolution upstream source (compose uses the published atendai/evolution-api image)
+evolution-api/
+# Standalone warmer prototype — holds runtime state + an apiKey; superseded by @evo/warmer-engine
+warmer/
+# Runtime user uploads
+apps/web/uploads/
+
+# TS incremental build cache
+*.tsbuildinfo
+
+# Visual brainstorm companion
+.superpowers/

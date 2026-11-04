@@ -1,0 +1,36 @@
+{
+  "name": "@evo/ingest",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@evo/ai": "workspace:*",
+    "@evo/crypto": "workspace:*",
+    "@evo/db": "workspace:*",
+    "@evo/kb": "workspace:*",
+    "@evo/evolution-client": "workspace:*",
+    "@evo/inbound-templating": "workspace:*",
+    "bullmq": "^5.30.0",
+    "@evo/flow-actions": "workspace:*",
+    "@evo/queue": "workspace:*",
+    "@evo/schedule": "workspace:*",
+    "@evo/send": "workspace:*",
+    "@evo/shared": "workspace:*",
+    "@evo/webhooks": "workspace:*",
+    "ioredis": "^5.4.0",
+    "pino": "^9.10.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.20.0",
+    "typescript": "5.7.2",
+    "vitest": "^2.1.0",
+    "@types/node": "^22.0.0"
+  }
+}

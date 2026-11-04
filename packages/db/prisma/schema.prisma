@@ -1,0 +1,1140 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum WorkspaceRole {
+  Owner
+  Admin
+  Agent
+  Viewer
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  locale       String   @default("en-GB")
+  isSuperAdmin Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  memberships WorkspaceMember[]
+  sessions    Session[]
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  userId       String
+  sessionToken String   @unique
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Workspace {
+  id              String   @id @default(cuid())
+  slug            String   @unique
+  name            String
+  timezone        String   @default("Asia/Kuala_Lumpur")
+  defaultLocale   String   @default("en-GB")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  members       WorkspaceMember[]
+  invitations   Invitation[]
+  instances     Instance[]
+  auditLogs     AuditLog[]
+  conversations Conversation[]
+  messages      Message[]
+  assignments   Assignment[]
+  notes         InternalNote[]
+  quickReplies  QuickReply[]
+  captions      Caption[]
+  contacts         Contact[]
+  labels           Label[]
+  lists            ContactList[]
+  templates        MessageTemplate[]
+  broadcasts       Broadcast[]
+  broadcastTargets BroadcastTarget[]
+  chatbots       Chatbot[]
+  dripCampaigns  DripCampaign[]
+  dripEnrolments DripEnrolment[]
+  warmerProfiles  WarmerProfile[]
+  warmerTemplates WarmerTemplate[]
+  warmerRuns      WarmerRun[]
+  warmerEvents    WarmerEvent[]
+  plan            WorkspacePlan?
+  apiKeys              ApiKey[]
+  webhookSubscriptions WebhookSubscription[]
+  aiKeys               WorkspaceAiKey[]
+  integrations         WorkspaceIntegration[]
+  mediaAssets          MediaAsset[]
+  mediaFolders         MediaFolder[]
+  botPendingStates     BotPendingState[]
+  aiActionConfigs      AiActionConfig[]
+  botUserLogs          BotUserLog[]
+  inboundIntegrations     InboundIntegration[]
+  inboundIntegrationLogs  InboundIntegrationLog[]
+  autoresponders          Autoresponder[]
+  instanceHealthPolicies   InstanceHealthPolicy[]
+  instanceHealthSnapshots  InstanceHealthSnapshot[]
+  healthAlerts             HealthAlert[]
+  knowledgeSnippets        KnowledgeSnippet[]
+  webhookDeliveryLogs      WebhookDeliveryLog[]
+  chatTopics               ChatTopic[]
+  instanceGroups           InstanceGroup[]
+  deliverabilityProbes     DeliverabilityProbe[]
+}
+
+model WorkspaceMember {
+  id          String        @id @default(cuid())
+  workspaceId String
+  userId      String
+  role        WorkspaceRole @default(Agent)
+  createdAt   DateTime      @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+  @@index([userId])
+}
+
+model Invitation {
+  id          String        @id @default(cuid())
+  workspaceId String
+  email       String
+  role        WorkspaceRole
+  token       String        @unique
+  expiresAt   DateTime
+  acceptedAt  DateTime?
+  createdAt   DateTime      @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([email])
+}
+
+enum InstanceConnectionState {
+  unknown
+  connecting
+  open
+  close
+}
+
+model Instance {
+  id                    String                  @id @default(cuid())
+  workspaceId           String
+  label                 String
+  evolutionInstanceName String                  @unique
+  evolutionApiKey       String
+  connectionState       InstanceConnectionState @default(unknown)
+  deliveryStatus        String    @default("unknown") // unknown | ok | delivery_failing | send_failing
+  deliveryCheckedAt     DateTime?
+  deliveryMissStreak    Int       @default(0)
+  sendFailStreak        Int       @default(0)
+  phoneNumber           String?
+  profileName           String?
+  profilePictureUrl     String?
+  lastSeenAt            DateTime?
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @updatedAt
+
+  workspace     Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  auditLogs     AuditLog[]
+  conversations Conversation[]
+  broadcasts    Broadcast[]
+  chatbot       Chatbot?
+  dripCampaigns DripCampaign[]
+  integrations  WorkspaceIntegration[]
+  inboundIntegrations InboundIntegration[]
+  autoresponder Autoresponder?
+  healthPolicy    InstanceHealthPolicy?
+  healthSnapshots InstanceHealthSnapshot[]
+  healthAlerts    HealthAlert[]
+
+  groupMemberships InstanceGroupMember[]
+
+  @@index([workspaceId])
+}
+
+model InstanceGroup {
+  id          String                @id @default(cuid())
+  workspaceId String
+  name        String
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+  workspace   Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  members     InstanceGroupMember[]
+  broadcasts  Broadcast[]
+  @@unique([workspaceId, name])
+  @@index([workspaceId])
+}
+
+model InstanceGroupMember {
+  groupId    String
+  instanceId String
+  group      InstanceGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  instance   Instance      @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+  @@id([groupId, instanceId])
+  @@index([instanceId])
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  workspaceId String
+  userId      String?
+  instanceId  String?
+  action      String
+  target      String
+  diff        Json?
+  createdAt   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  instance  Instance? @relation(fields: [instanceId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, createdAt])
+  @@index([instanceId])
+}
+
+enum MessageDirection {
+  inbound
+  outbound
+}
+
+enum MessageStatus {
+  pending
+  sent
+  delivered
+  read
+  failed
+}
+
+enum ConversationStatus {
+  open
+  pending
+  resolved
+}
+
+model Conversation {
+  id                String             @id @default(cuid())
+  workspaceId       String
+  instanceId        String
+  contactPhone      String
+  contactName       String?
+  // WhatsApp LID (username privacy) capture. contactLid is the sender's hidden
+  // @lid identifier; contactPhoneReal is their real phone from the message's
+  // remoteJidAlt when addressingMode="lid" (the plain contactPhone may hold the
+  // LID digits for privacy senders). Both power the LID export.
+  contactLid        String?
+  contactPhoneReal  String?
+  lastMessageAt     DateTime           @default(now())
+  unreadCount       Int                @default(0)
+  status            ConversationStatus @default(open)
+  assignedToUserId  String?
+  botPaused         Boolean            @default(false)
+  botPausedReason   String?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  instance  Instance  @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+  messages  Message[]
+  notes     InternalNote[]
+  assignments Assignment[]
+
+  @@unique([instanceId, contactPhone])
+  @@index([workspaceId, lastMessageAt])
+  @@index([assignedToUserId])
+}
+
+model Message {
+  id                String           @id @default(cuid())
+  workspaceId       String
+  conversationId    String
+  direction         MessageDirection
+  evolutionMessageId String?         @unique
+  type              String
+  body              String?
+  mediaUrl          String?
+  status            MessageStatus    @default(pending)
+  sentByUserId      String?
+  sentAt            DateTime         @default(now())
+  createdAt         DateTime         @default(now())
+
+  workspace    Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, sentAt])
+  @@index([conversationId, sentAt])
+}
+
+model Assignment {
+  id              String   @id @default(cuid())
+  workspaceId     String
+  conversationId  String
+  userId          String
+  assignedAt      DateTime @default(now())
+
+  workspace    Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, assignedAt])
+}
+
+model InternalNote {
+  id              String   @id @default(cuid())
+  workspaceId     String
+  conversationId  String
+  userId          String
+  body            String
+  createdAt       DateTime @default(now())
+
+  workspace    Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+}
+
+model QuickReply {
+  id          String   @id @default(cuid())
+  workspaceId String
+  shortcut    String
+  body        String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, shortcut])
+  @@index([workspaceId])
+}
+
+model Caption {
+  id          String   @id @default(cuid())
+  workspaceId String
+  name        String
+  body        String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, name])
+  @@index([workspaceId])
+}
+
+enum BroadcastStatus {
+  draft
+  scheduled
+  running
+  paused
+  completed
+  failed
+}
+
+enum BroadcastTargetStatus {
+  queued
+  sending
+  sent
+  delivered
+  read
+  failed
+}
+
+model Contact {
+  id            String   @id @default(cuid())
+  workspaceId   String
+  phoneE164     String
+  name          String?
+  customFields  Json?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  labels    ContactLabel[]
+  listMemberships ContactListMember[]
+  broadcastTargets BroadcastTarget[]
+  dripEnrolments DripEnrolment[]
+
+  @@unique([workspaceId, phoneE164])
+  @@index([workspaceId, name])
+}
+
+model Label {
+  id          String   @id @default(cuid())
+  workspaceId String
+  name        String
+  colour      String   @default("#6b7280")
+  createdAt   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  contacts  ContactLabel[]
+
+  @@unique([workspaceId, name])
+}
+
+model ContactLabel {
+  contactId String
+  labelId   String
+
+  contact Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  label   Label   @relation(fields: [labelId], references: [id], onDelete: Cascade)
+
+  @@id([contactId, labelId])
+}
+
+model ContactList {
+  id          String   @id @default(cuid())
+  workspaceId String
+  name        String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  members   ContactListMember[]
+  broadcasts Broadcast[]
+
+  @@unique([workspaceId, name])
+}
+
+model ContactListMember {
+  listId    String
+  contactId String
+
+  list    ContactList @relation(fields: [listId], references: [id], onDelete: Cascade)
+  contact Contact     @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@id([listId, contactId])
+  @@index([contactId])
+}
+
+model MessageTemplate {
+  id          String   @id @default(cuid())
+  workspaceId String
+  name        String
+  body        String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  broadcasts Broadcast[]
+
+  @@unique([workspaceId, name])
+}
+
+model Broadcast {
+  id            String          @id @default(cuid())
+  workspaceId   String
+  instanceId    String
+  templateId    String?
+  mediaAssetId  String?
+  listId        String
+  name          String
+  status        BroadcastStatus @default(draft)
+  scheduledAt   DateTime?
+  startedAt     DateTime?
+  completedAt   DateTime?
+  jitterMinMs           Int             @default(2000)
+  jitterMaxMs           Int             @default(8000)
+  intervalMinSec        Int?
+  intervalMaxSec        Int?
+  // Cumulative send-pacing cursor: the time the *next* message may be sent. The
+  // scheduler staggers each send by (previous slot + gap) instead of giving every
+  // message an independent delay — so a batch actually spaces out across time.
+  nextSlotAt            DateTime?
+  scheduleJson          Json?
+  excludeContactListIds String[]        @default([])
+  fallbackInstanceIds   String[]        @default([])
+  instanceGroupId String?
+  groupSendMode   String?
+  rotateEvery     Int?
+  groupState      Json?
+  instanceGroup   InstanceGroup? @relation(fields: [instanceGroupId], references: [id], onDelete: SetNull)
+  createdByUserId String
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  workspace Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  instance  Instance         @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+  template   MessageTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  mediaAsset MediaAsset?      @relation(fields: [mediaAssetId], references: [id], onDelete: SetNull)
+  list       ContactList      @relation(fields: [listId], references: [id], onDelete: Cascade)
+  targets    BroadcastTarget[]
+
+  @@index([workspaceId, status])
+  @@index([workspaceId, createdAt])
+}
+
+model BroadcastTarget {
+  id           String                @id @default(cuid())
+  workspaceId  String
+  broadcastId  String
+  contactId    String
+  status       BroadcastTargetStatus @default(queued)
+  error        String?
+  instanceId   String?
+  sentAt       DateTime?
+  evolutionMessageId String?
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  broadcast Broadcast @relation(fields: [broadcastId], references: [id], onDelete: Cascade)
+  contact   Contact   @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@unique([broadcastId, contactId])
+  @@index([broadcastId, status])
+}
+
+enum ChatbotFallbackProvider {
+  none
+  claude
+  openai
+}
+
+enum KeywordMatchType {
+  exact
+  contains
+  startsWith
+}
+
+enum TriggerAudience {
+  all
+  individual
+  group
+}
+
+enum BotPendingKind {
+  save_response
+  next_action
+}
+
+enum DripTriggerType {
+  manual
+  newContact
+}
+
+enum DripEnrolmentStatus {
+  active
+  completed
+  paused
+  failed
+}
+
+model Chatbot {
+  id               String                  @id @default(cuid())
+  workspaceId      String
+  instanceId       String                  @unique
+  enabled          Boolean                 @default(true)
+  welcomeMessage   String?
+  fallbackProvider ChatbotFallbackProvider @default(none)
+  fallbackModel    String?
+  systemPrompt     String?
+  aiTemperature    Float?
+  aiContextLength  Int?
+  scheduleJson     Json?
+  pauseBot         Boolean                 @default(false)
+  unsubscribeKeyword String?
+  limiterJson      Json?
+  filterJson       Json?
+  topicId          String?
+  createdAt        DateTime                @default(now())
+  updatedAt        DateTime                @updatedAt
+
+  workspace      Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  instance       Instance         @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+  topic          ChatTopic?       @relation(fields: [topicId], references: [id], onDelete: SetNull)
+  triggers       KeywordTrigger[]
+  aiActionConfig AiActionConfig?
+
+  @@index([workspaceId])
+}
+
+model KeywordTrigger {
+  id              String           @id @default(cuid())
+  chatbotId       String
+  keyword         String
+  matchType       KeywordMatchType @default(contains)
+  response        String
+  // General (Wasapbot "Chatbot | General")
+  name            String?
+  description     String?
+  sendTo          TriggerAudience  @default(all)
+  isDefaultReply  Boolean          @default(false)
+  // Content (Wasapbot "Chatbot | Content")
+  presenceDelaySec Int             @default(0)
+  mediaAssetId    String?          // Plan 7 dependency: plain column now, FK to MediaAsset added once Plan 7 lands
+  // Advanced (Wasapbot "Chatbot | Advanced") — ordered action chain
+  actions         Json             @default("[]")
+  createdAt       DateTime         @default(now())
+
+  chatbot Chatbot @relation(fields: [chatbotId], references: [id], onDelete: Cascade)
+
+  @@index([chatbotId])
+}
+
+enum BotNotifyType {
+  whatsapp_number
+  whatsapp_group
+}
+
+enum FollowUpLastSender {
+  chatbot
+  customer
+}
+
+enum BotUserLogKind {
+  trigger_matched
+  ai_reply
+  auto_label
+  human_takeover
+  follow_up_sent
+  action_run
+}
+
+/// 1:1 with Chatbot. The three JSON blobs are validated by zod in the API layer.
+model AiActionConfig {
+  id            String   @id @default(cuid())
+  workspaceId   String
+  chatbotId     String   @unique
+  autoLabel     Json     @default("{\"enabled\":false,\"rules\":[]}")
+  humanTakeover Json     @default("{\"enabled\":false}")
+  autoFollowUp  Json     @default("{\"enabled\":false,\"steps\":[]}")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  chatbot   Chatbot   @relation(fields: [chatbotId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+}
+
+model BotUserLog {
+  id             String         @id @default(cuid())
+  workspaceId    String
+  conversationId String?
+  contactId      String?
+  instanceId     String
+  kind           BotUserLogKind
+  detail         Json?
+  createdAt      DateTime       @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, createdAt])
+  @@index([conversationId, createdAt])
+  @@index([instanceId, createdAt])
+}
+
+model BotPendingState {
+  id             String         @id @default(cuid())
+  workspaceId    String
+  conversationId String
+  contactPhone   String
+  kind           BotPendingKind
+  payload        Json           @default("{}")
+  expiresAt      DateTime
+  createdAt      DateTime       @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId])
+  @@index([workspaceId, expiresAt])
+}
+
+model DripCampaign {
+  id          String           @id @default(cuid())
+  workspaceId String
+  instanceId  String
+  name        String
+  triggerType DripTriggerType  @default(manual)
+  steps       Json
+  active      Boolean          @default(true)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  workspace  Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  instance   Instance         @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+  enrolments DripEnrolment[]
+
+  @@unique([workspaceId, name])
+  @@index([workspaceId, active])
+}
+
+model DripEnrolment {
+  id          String              @id @default(cuid())
+  workspaceId String
+  campaignId  String
+  contactId   String
+  currentStep Int                 @default(0)
+  status      DripEnrolmentStatus @default(active)
+  nextRunAt   DateTime
+  startedAt   DateTime            @default(now())
+  completedAt DateTime?
+
+  workspace Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  campaign  DripCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  contact   Contact      @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, contactId])
+  @@index([workspaceId, status, nextRunAt])
+}
+
+enum WarmerMode {
+  internal
+  pair
+}
+
+enum WarmerRunStatus {
+  starting
+  running
+  paused
+  stopped
+  failed
+}
+
+enum WarmerEventKind {
+  send
+  presence
+  reaction
+  health
+  error
+  info
+}
+
+model WarmerProfile {
+  id          String    @id @default(cuid())
+  workspaceId String
+  name        String
+  config      Json
+  enabled     Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  runs      WarmerRun[]
+  templates WarmerTemplate[]
+
+  @@unique([workspaceId, name])
+  @@index([workspaceId, enabled])
+}
+
+model WarmerTemplate {
+  id          String   @id @default(cuid())
+  workspaceId String
+  warmerProfileId String?  // null = shared pool (fallback for profiles with no own templates)
+  body        String
+  createdAt   DateTime @default(now())
+
+  workspace Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  profile   WarmerProfile? @relation(fields: [warmerProfileId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, warmerProfileId])
+}
+
+model WarmerPreset {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String
+  config      Json
+  createdAt   DateTime @default(now())
+}
+
+model WarmerRun {
+  id         String          @id @default(cuid())
+  profileId  String
+  workspaceId String
+  status     WarmerRunStatus @default(starting)
+  startedAt  DateTime        @default(now())
+  stoppedAt  DateTime?
+
+  profile   WarmerProfile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  workspace Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  events    WarmerEvent[]
+
+  @@index([workspaceId, status])
+  @@index([profileId, startedAt])
+}
+
+model WarmerEvent {
+  id         String          @id @default(cuid())
+  workspaceId String
+  runId      String
+  instanceId String?
+  kind       WarmerEventKind
+  detail     Json?
+  createdAt  DateTime        @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  run       WarmerRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([runId, createdAt])
+  @@index([workspaceId, createdAt])
+}
+
+enum PlanKind {
+  free
+  pro
+  enterprise
+  custom
+}
+
+model Plan {
+  id                String   @id @default(cuid())
+  kind              PlanKind @unique
+  name              String
+  description       String
+  contactCap        Int
+  instanceCap       Int
+  monthlyMessageCap Int
+  featureFlags      Json
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  workspaces WorkspacePlan[]
+}
+
+model WorkspacePlan {
+  workspaceId String    @id
+  planId      String
+  since       DateTime  @default(now())
+  until       DateTime?
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  plan      Plan      @relation(fields: [planId], references: [id])
+
+  @@index([planId])
+}
+
+enum AiProvider {
+  claude
+  openai
+  ollama
+  gemini
+  grok
+}
+
+enum IntegrationKind {
+  chatwoot
+  typebot
+  rabbitmq
+  sqs
+  kafka
+  pusher
+}
+
+model ApiKey {
+  id              String    @id @default(cuid())
+  workspaceId     String
+  name            String
+  hashedKey       String
+  scopes          Json
+  lastUsedAt      DateTime?
+  createdByUserId String
+  createdAt       DateTime  @default(now())
+  revokedAt       DateTime?
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([hashedKey])
+}
+
+model WebhookSubscription {
+  id          String   @id @default(cuid())
+  workspaceId String
+  url         String
+  secret      String
+  events      Json
+  enabled     Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, enabled])
+}
+
+model WorkspaceAiKey {
+  workspaceId    String
+  scope          String     @default("default") // "default" | "warmer" | "chatbot"
+  provider       AiProvider
+  encryptedKey   String
+  defaultModel   String?
+  endpoint       String?    // base URL for self-hosted / Ollama providers
+  updatedAt      DateTime   @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@id([workspaceId, scope])
+}
+
+model WorkspaceIntegration {
+  id          String          @id @default(cuid())
+  workspaceId String
+  instanceId  String?
+  kind        IntegrationKind
+  config      Json
+  enabled     Boolean         @default(true)
+  updatedAt   DateTime        @updatedAt
+
+  workspace Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  instance  Instance?  @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, instanceId, kind])
+  @@index([workspaceId, kind])
+}
+
+enum MediaKind {
+  image
+  video
+  audio
+  document
+}
+
+model MediaAsset {
+  id           String      @id @default(cuid())
+  workspaceId  String
+  filename     String
+  mimetype     String
+  sizeBytes    Int
+  storageKey   String
+  kind         MediaKind
+  uploadedById String?
+  folderId     String?
+  createdAt    DateTime    @default(now())
+
+  workspace  Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  folder     MediaFolder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  broadcasts Broadcast[]
+
+  @@index([workspaceId])
+  @@index([folderId])
+}
+
+model MediaFolder {
+  id          String   @id @default(cuid())
+  workspaceId String
+  name        String
+  createdAt   DateTime @default(now())
+
+  workspace Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  assets    MediaAsset[]
+
+  @@unique([workspaceId, name])
+  @@index([workspaceId])
+}
+
+enum InboundLogStatus {
+  received
+  sent
+  failed
+  no_recipient
+}
+
+model InboundIntegration {
+  id               String   @id @default(cuid())
+  workspaceId      String
+  instanceId       String
+  name             String
+  description      String?
+  token            String   @unique
+  enabled          Boolean  @default(true)
+  recipientPathKey String
+  captionTemplate  String
+  mediaAssetId     String?
+  captureArmed     Boolean  @default(false)
+  lastReceivedAt   DateTime?
+  lastSamplePayload Json?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  workspace Workspace                @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  instance  Instance                 @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+  logs      InboundIntegrationLog[]
+
+  @@index([workspaceId, createdAt])
+  @@index([instanceId])
+}
+
+model InboundIntegrationLog {
+  id            String           @id @default(cuid())
+  workspaceId   String
+  integrationId String
+  payload       Json
+  resolvedPhone String?
+  status        InboundLogStatus
+  error         String?
+  createdAt     DateTime         @default(now())
+
+  workspace   Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  integration InboundIntegration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+
+  @@index([integrationId, createdAt])
+  @@index([workspaceId, createdAt])
+}
+
+enum AudienceScope {
+  all
+  individual
+  group
+}
+
+model Autoresponder {
+  id                    String        @id @default(cuid())
+  workspaceId           String
+  instanceId            String        @unique
+  enabled               Boolean       @default(false)
+  sendTo                AudienceScope @default(all)
+  text                  String?
+  mediaAssetId          String?       // Plan 7 MediaAsset; stored, sent only if media path exists
+  caption               String?
+  rejectCall            Boolean       @default(false)
+  msgCall               String?       // optional auto-reply text on rejected call (Evolution msgCall)
+  pausePerCustomerSec   Int           @default(60)
+  scheduleJson          Json?         // ScheduleConfig from @evo/schedule; null/empty = anytime
+  excludeContactListIds String[]      @default([])
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  instance  Instance  @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+}
+
+enum HealthRisk {
+  healthy
+  caution
+  at_risk
+}
+
+enum HealthAlertKind {
+  went_at_risk
+  auto_protected
+  ramp_cap_reached
+}
+
+model InstanceHealthPolicy {
+  instanceId    String    @id
+  workspaceId   String
+  rampEnabled   Boolean   @default(false)
+  rampStartedAt DateTime?
+  rampBaseDaily Int       @default(20)
+  rampGrowthPct Int       @default(15)
+  rampMaxDaily  Int       @default(500)
+  autoProtect   Boolean   @default(false)
+  updatedAt     DateTime  @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  instance  Instance  @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+}
+
+model InstanceHealthSnapshot {
+  id          String     @id @default(cuid())
+  workspaceId String
+  instanceId  String
+  date        DateTime   @db.Date
+  score       Int
+  risk        HealthRisk
+  metrics     Json
+  createdAt   DateTime   @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  instance  Instance  @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+
+  @@unique([instanceId, date])
+  @@index([workspaceId, date])
+}
+
+model HealthAlert {
+  id             String          @id @default(cuid())
+  workspaceId    String
+  instanceId     String
+  kind           HealthAlertKind
+  detail         Json?
+  acknowledgedAt DateTime?
+  createdAt      DateTime        @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  instance  Instance  @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, createdAt])
+  @@index([instanceId, createdAt])
+}
+
+model DeliverabilityProbe {
+  id                String    @id @default(cuid())
+  workspaceId       String
+  instanceId        String    // sender under test
+  controlInstanceId String    // receiver (another number in the workspace)
+  token             String    @unique
+  status            String    @default("pending") // pending | delivered | missed
+  sentAt            DateTime  @default(now())
+  receivedAt        DateTime?
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  @@index([workspaceId, instanceId, sentAt])
+  @@index([status])
+}
+
+model ChatTopic {
+  id          String   @id @default(cuid())
+  workspaceId String
+  name        String
+  personaTone String?
+  greeting    String?
+  guardrails  Json
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  snippets  KnowledgeSnippet[]
+  chatbots  Chatbot[]
+
+  @@unique([workspaceId, name])
+  @@index([workspaceId])
+}
+
+model KnowledgeSnippet {
+  id          String   @id @default(cuid())
+  workspaceId String
+  title       String
+  content     String
+  enabled     Boolean  @default(true)
+  topicId     String?
+  sourceType  String   @default("faq")
+  sourceLabel String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  topic     ChatTopic? @relation(fields: [topicId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, enabled])
+  @@index([topicId])
+}
+
+model WebhookDeliveryLog {
+  id             String   @id @default(cuid())
+  workspaceId    String
+  subscriptionId String?
+  event          String
+  url            String
+  ok             Boolean
+  statusCode     Int?
+  error          String?
+  createdAt      DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, createdAt])
+}
