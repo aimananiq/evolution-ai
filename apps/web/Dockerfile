@@ -14,4 +14,4 @@ WORKDIR /app
 COPY --from=base /app /app
 EXPOSE 3000
 WORKDIR /app/apps/web
-CMD ["pnpm", "start"]
+CMD ["sh", "-c", "cd /app && pnpm --filter @evo/db migrate && cd /app/apps/web && pnpm start"]
