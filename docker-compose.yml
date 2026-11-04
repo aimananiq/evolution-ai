@@ -108,10 +108,9 @@ services:
       redis-manager: { condition: service_healthy }
 
   caddy:
-    image: caddy:2-alpine
+    build: { context: ., dockerfile: apps/caddy/Dockerfile }
     expose: ["80"]
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile
       - caddy-data:/data
       - caddy-config:/config
     depends_on: [web, ingest]
